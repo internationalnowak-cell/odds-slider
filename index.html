@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Odds ↔ %</title>
+<meta name="theme-color" content="#f4f1ea">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#f4f1ea;--ink:#1d1b3a;--mut:#7a7890;--line:#1d1b3a;--acc:#2a7a4b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15151c;--ink:#e8e6f5;--mut:#8b89a3;--line:#e8e6f5;--acc:#5fd08a}}
+:root[data-theme="dark"]{--bg:#15151c;--ink:#e8e6f5;--mut:#8b89a3;--line:#e8e6f5;--acc:#5fd08a}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+.wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:8px;user-select:none}
+.row{display:flex;gap:12px;align-items:center}
+.col{display:flex;flex-direction:column;align-items:center;touch-action:none;cursor:ns-resize;padding:0}
+.dash{width:0;height:70px;border-left:3px dashed var(--line);opacity:.6}
+.nb{font-size:min(5.5vw,22px);color:var(--mut);cursor:pointer;padding:4px 14px;font-variant-numeric:tabular-nums}
+.nb:hover{color:var(--ink)}
+.box{border:3px solid var(--line);border-radius:6px;width:min(calc((100vw - 48px)/2),200px);height:min(26vw,110px);box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:min(14vw,64px);font-weight:300;font-variant-numeric:tabular-nums;position:relative}
+.dec{font-size:.75em}
+.box.pct{cursor:text}
+.box input{position:absolute;inset:0;width:100%;height:100%;box-sizing:border-box;border:0;outline:0;background:transparent;color:transparent;caret-color:transparent;text-align:center;font-size:min(14vw,64px)}
+.box.pct:focus-within{border-color:var(--acc)}
+.pin{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);right:8px;border:1px solid var(--mut);background:transparent;color:var(--ink);border-radius:8px;padding:4px 10px;font-size:15px;cursor:pointer;opacity:.7}
+.pin:hover{opacity:1}
+.hint{font-size:13px;color:var(--mut);text-align:center;max-width:420px;line-height:1.5}
+.info{font-size:14px;color:var(--mut);font-variant-numeric:tabular-nums}
+.info b{color:var(--acc);font-weight:600}
+</style>
+</head>
+<body>
+<button class="pin" id="pin" title="Zawsze na wierzchu (okno PiP)">📌</button>
+<div class="wrap">
+  <div class="row">
+    <div class="col" id="col2">
+      <div class="dash"></div>
+      <div class="nb" id="pu">47.5</div>
+      <div class="box pct"><div id="pdisp">47.2</div><input id="pct" inputmode="decimal" value="47.2" aria-label="Procent"></div>
+      <div class="nb" id="pd">47.0</div>
+      <div class="dash"></div>
+    </div>
+    <div class="col" id="col">
+      <div class="dash"></div>
+      <div class="nb" id="up">2.14</div>
+      <div class="box" id="odds">2.12</div>
+      <div class="nb" id="dn">2.10</div>
+      <div class="dash"></div>
+    </div>
+  </div>
+</div>
+<script>
+// Drabinka tickow Betfair (w setnych: 1.01 = 101)
+const T=[];
+[[101,200,1],[200,300,2],[300,400,5],[400,600,10],[600,1000,20],[1000,2000,50],[2000,3000,100],[3000,5000,200],[5000,10000,500],[10000,100000,1000]]
+.forEach(([a,b,s])=>{for(let c=a;c<b;c+=s)T.push(c)});T.push(100000);
+let i=T.indexOf(212), pv=47.2;
+let D=document;const $=id=>D.getElementById(id), inp=$('pct');
+const f=c=>(c/100).toFixed(2), p=c=>10000/c, pf=v=>v.toFixed(1);
+const fmt=s=>{const k=s.search(/[.,]/);return k<0?s:s.slice(0,k)+'<span class="dec">'+s.slice(k)+'</span>'};
+const nxt=(v,d)=>Math.max(1,Math.min(99,(d>0?Math.floor(v/0.5+1e-9)+d:Math.ceil(v/0.5-1e-9)+d)*0.5));
+function render(skipPct){
+  $('odds').innerHTML=fmt(f(T[i]));
+  $('up').innerHTML=i<T.length-1?fmt(f(T[i+1])):'';
+  $('dn').innerHTML=i>0?fmt(f(T[i-1])):'';
+  if(!skipPct){pv=Math.round(p(T[i])*10)/10;inp.value=pf(pv)}
+  $('pdisp').innerHTML=fmt(inp.value);
+  $('pu').innerHTML=fmt(pf(nxt(pv,1)));$('pd').innerHTML=fmt(pf(nxt(pv,-1)));
+}
+function step(d){i=Math.max(0,Math.min(T.length-1,i+d));render()}
+// procent -> kurs
+function fromPct(){
+  const v=parseFloat(inp.value.replace(',','.'));
+  if(!(v>0)){render(true);return}
+  const c=Math.max(101,Math.min(100000,10000/Math.min(v,99)));
+  let b=0,bd=1e9;for(let k=0;k<T.length;k++){const d=Math.abs(T[k]-c);if(d<bd){bd=d;b=k}}
+  pv=Math.round(Math.min(99,v)*10)/10;i=b;render(true);
+}
+function stepP(d){
+  const v=parseFloat(inp.value.replace(',','.'));
+  inp.value=pf(nxt(isNaN(v)?pv:v,d));fromPct();
+}
+// drag helper
+function drag(el,px,fn){
+  let y=null,cap=false;
+  el.addEventListener('pointerdown',e=>{y=e.clientY;cap=false});
+  el.addEventListener('pointermove',e=>{if(y===null)return;const d=Math.trunc((y-e.clientY)/px);if(d){if(!cap){el.setPointerCapture(e.pointerId);cap=true;inp.blur()}fn(d);y-=d*px}});
+  ['pointerup','pointercancel'].forEach(t=>el.addEventListener(t,()=>{y=null;cap=false}));
+  el.addEventListener('wheel',e=>{e.preventDefault();fn(e.deltaY<0?1:-1)},{passive:false});
+}
+drag($('col'),16,step);
+drag($('col2'),14,d=>{for(let k=0;k<Math.abs(d);k++)stepP(Math.sign(d))});
+$('up').onclick=()=>step(1);$('dn').onclick=()=>step(-1);
+$('pu').onclick=()=>stepP(1);$('pd').onclick=()=>stepP(-1);
+const kd=e=>{
+  if(e.key!=='ArrowUp'&&e.key!=='ArrowDown')return;e.preventDefault();
+  const d=e.key==='ArrowUp'?1:-1;
+  if(D.activeElement===inp)stepP(d);else step(d);
+};
+document.addEventListener('keydown',kd);
+inp.addEventListener('input',fromPct);
+inp.addEventListener('blur',()=>render());
+inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur()});
+const pin=$('pin');
+if(!('documentPictureInPicture' in window))pin.style.display='none';
+pin.onclick=async()=>{
+  try{
+    const w=await documentPictureInPicture.requestWindow({width:480,height:340});
+    document.querySelectorAll('style').forEach(st=>w.document.head.appendChild(st.cloneNode(true)));
+    const wrap=document.querySelector('.wrap'),home=wrap.parentNode;
+    w.document.body.appendChild(wrap);D=w.document;
+    w.document.addEventListener('keydown',kd);
+    w.addEventListener('pagehide',()=>{D=document;home.insertBefore(wrap,pin);render()});
+  }catch(e){}
+};
+render();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
